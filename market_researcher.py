@@ -2,7 +2,10 @@ import pandas as pd
 import argparse
 from random import randint
 import time
-from googlesearch import search
+import os
+from dotenv import load_dotenv
+load_dotenv()
+from googleapiclient.discovery import build
 
 def check_websites_for_terms(csv_file, search_terms):
     # Read the CSV file into a DataFrame
@@ -17,28 +20,32 @@ def check_websites_for_terms(csv_file, search_terms):
     for term in search_terms:
         df[f'PagesWith_{term}'] = 0
     
+    # Initialize the Custom Search API client
+    api_key = os.environ.get('GOOGLE_API_KEY')
+    print(f"API_KEY {api_key}")
+    cse_id = "035dccbea6cac4745"  # Replace with your Custom Search Engine ID
+    service = build("customsearch", "v1", developerKey=api_key)
+    
     # Loop through each website and perform Google searches
     for index, row in df.iterrows():
         website = row['Website']
         
         for term in search_terms:
             try:
-
                 query = f"site:{website} {term}"
                 
                 # Perform the Google search
-                search_results = search(query, num_results=100)
-                
-                # Count the number of pages from the website that contain the term
-                count = sum(website in result['url'] for result in search_results)
+                res = service.cse().list(q=query, cx=cse_id).execute()
+                count = res['searchInformation']['totalResults']
                 
                 # Update the DataFrame
                 df.at[index, f'PagesWith_{term}'] = count
                 
                 print(f"Processed {website}. Found {count} pages containing '{term}'.")
-
+                
                 # Introduce a delay
-                time.sleep(randint(30,40))
+                time.sleep(2)
+                
             except Exception as e:
                 print(f"An error occurred: {e}")
                 
@@ -46,8 +53,7 @@ def check_websites_for_terms(csv_file, search_terms):
                 df.to_csv("output_with_page_counts.csv", index=False)
                 
                 return
-    # Save the DataFrame to a new CSV file
-    df.to_csv("output_with_page_counts.csv", index=False)   
+    df.to_csv("output_with_page_counts.csv", index=False)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Check company websites for specific terms.')
